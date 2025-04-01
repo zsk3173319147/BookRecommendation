@@ -85,34 +85,23 @@ class NCFModel(nn.Module):
         predict = self.sigmoid(self.prediction(vector))
         return predict.view(-1)
 
-class NeuralCollaborativeFiltering:
-    def __init__(self, embedding_dim=32, layers=[64, 32, 16], learning_rate=0.001, 
-                 epochs=20, batch_size=256, device=None):
-        """
-        初始化NCF模型
-        
-        参数:
-            embedding_dim: 嵌入向量维度
-            layers: MLP层的神经元数量列表
-            learning_rate: 学习率
-            epochs: 训练轮数
-            batch_size: 批量大小
-            device: 计算设备 (CPU/GPU)
-        """
+class NCF:
+    def __init__(self, embedding_dim=16, layers=[64, 32], learning_rate=0.005,
+                 epochs=10, batch_size=1024, device=None, neg_ratio=2,
+                 early_stopping_patience=2, sample_ratio=1.0):
         self.embedding_dim = embedding_dim
         self.layers = layers
         self.learning_rate = learning_rate
         self.epochs = epochs
         self.batch_size = batch_size
-        
-        # 设置计算设备
         self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"使用设备: {self.device}")
-        
-        self.model = None
+        self.neg_ratio = neg_ratio  # 负采样比例
+        self.early_stopping_patience = early_stopping_patience
+        self.sample_ratio = sample_ratio
+        # 添加损失记录列表
         self.train_losses = []
-        self.val_losses = []
-        
+        self.val_losses = []  # 添加验证损失列表初始化
+
     def load_data(self, filepath):
         """加载训练数据"""
         print("加载数据...")
@@ -141,7 +130,7 @@ class NeuralCollaborativeFiltering:
         for u, i in zip(user_indices, item_indices):
             self.interaction_matrix[u, i] = True
         
-        # 创建正样本
+        # 创建正���本
         self.train_user_indices = user_indices
         self.train_item_indices = item_indices
         self.train_labels = np.ones(len(self.train_data))
@@ -151,6 +140,15 @@ class NeuralCollaborativeFiltering:
         
         print(f"预处理完成，用户数: {len(self.unique_users)}, 物品数: {len(self.unique_items)}")
         print(f"训练样本: {len(self.train_labels)} (正样本: {len(self.train_data)}, 负样本: {len(self.train_labels) - len(self.train_data)})")
+        
+        print(f"生成负样本，比例 1:{self.neg_ratio}...")
+        # 修改负采样逻辑，使用self.neg_ratio
+        
+        # 如果使用数据抽样
+        if self.sample_ratio < 1.0:
+            sample_size = int(len(self.train_data) * self.sample_ratio)
+            self.train_data = self.train_data.sample(n=sample_size, random_state=42)
+            print(f"数据抽样: {sample_size} 条记录 ({self.sample_ratio * 100:.1f}%)")
         
     def _negative_sampling(self, negative_ratio=4):
         """生成负样本"""
@@ -251,6 +249,15 @@ class NeuralCollaborativeFiltering:
         early_stop_count = 0
         patience = 3
         
+        # 添加学习率调度器
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', factor=0.5, patience=1, verbose=True
+        )
+        
+        # 早停变量
+        best_loss = float('inf')
+        patience_counter = 0
+        
         # 训练循环
         for epoch in range(self.epochs):
             # 训练阶段
@@ -280,6 +287,7 @@ class NeuralCollaborativeFiltering:
             # 计算平均训练损失
             avg_train_loss = total_loss / len(train_loader)
             self.train_losses.append(avg_train_loss)
+            print(f"Epoch {epoch+1}/{self.epochs}, 平均损失: {avg_train_loss:.4f}")
             
             # 验证阶段
             self.model.eval()
@@ -313,6 +321,27 @@ class NeuralCollaborativeFiltering:
             if early_stop_count >= patience:
                 print(f"验证损失连续{patience}轮未下降，提前停止训练")
                 break
+            
+            # 每个epoch结束后
+            avg_loss = total_loss / len(train_loader)
+            print(f"Epoch {epoch+1}/{self.epochs}, 平均损失: {avg_loss:.4f}")
+            
+            # 学习率调度
+            scheduler.step(avg_loss)
+            
+            # 早停检查
+            if avg_loss < best_loss:
+                best_loss = avg_loss
+                patience_counter = 0
+                # 保存最佳模型
+                torch.save(self.model.state_dict(), 'best_ncf_model.pth')
+            else:
+                patience_counter += 1
+                if patience_counter >= self.early_stopping_patience:
+                    print(f"早停：{self.early_stopping_patience} 个epochs内没有改进")
+                    # 加载最佳模型
+                    self.model.load_state_dict(torch.load('best_ncf_model.pth'))
+                    break
         
         # 训练完成，记录总时间
         training_time = time.time() - start_time
@@ -421,23 +450,26 @@ class NeuralCollaborativeFiltering:
 # 主函数
 def main():
     # 初始化模型
-    ncf = NeuralCollaborativeFiltering(
-        embedding_dim=32, 
-        layers=[128, 64, 32], 
-        learning_rate=0.001, 
+    ncf = NCF(
+        embedding_dim=16, 
+        layers=[64, 32], 
+        learning_rate=0.008, 
         epochs=10,
-        batch_size=256
+        batch_size=1024,
+        neg_ratio=2,
+        early_stopping_patience=2,
+        sample_ratio=0.3
     )
     
     # 加载数据
-    ncf.load_data('D:\\Python\project\\bookRecommendation\\data\\train_dataset.csv')  # 使用评估划分的训练集
+    ncf.load_data('D:\\Python\project\\bookRecommendation\\BookRecommendation\\data\\train_dataset.csv')  # 使用评估划分的训练集
     ncf.preprocess()
     
     # 训练模型
     ncf.train()
     
     # 加载测试用户
-    test_users = pd.read_csv('D:\\Python\project\\bookRecommendation\\data\\test_dataset.csv')['user_id'].tolist()
+    test_users = pd.read_csv('D:\Python\project\\bookRecommendation\BookRecommendation\data\\test_dataset.csv')['user_id'].tolist()
     
     # 生成推荐
     recommendations = ncf.generate_recommendations(test_users, top_n=10)

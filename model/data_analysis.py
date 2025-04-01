@@ -32,8 +32,8 @@ def save_figure(filename, description):
 # ===== 开始数据分析 =====
 
 # 加载数据
-train_data = pd.read_csv('D:\\Python\project\\bookRecommendation\\data\\train_dataset.csv')
-test_users = pd.read_csv('D:\\Python\project\\bookRecommendation\\data\\test_dataset.csv')
+train_data = pd.read_csv('D:\Python\project\\bookRecommendation\BookRecommendation\data\\train_dataset.csv')
+test_users = pd.read_csv('D:\Python\project\\bookRecommendation\BookRecommendation\data\\test_dataset.csv')
 
 # 基本信息查看
 print("训练集信息:")

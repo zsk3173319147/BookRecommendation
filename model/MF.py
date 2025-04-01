@@ -136,14 +136,14 @@ if __name__ == "__main__":
     mf = MatrixFactorization(factors=100, regularization=0.01, iterations=15, alpha=40)
     
     # 加载数据
-    mf.load_data('D:\\Python\\project\\bookRecommendation\\data\\train_dataset.csv')
+    mf.load_data('D:\Python\project\\bookRecommendation\BookRecommendation\data\\train_dataset.csv')
     mf.preprocess()
     
     # 训练模型
     mf.train()
     
     # 加载测试用户
-    test_users = pd.read_csv('D:\\Python\\project\\bookRecommendation\\data\\test_dataset.csv')['user_id'].tolist()
+    test_users = pd.read_csv('D:\Python\project\\bookRecommendation\BookRecommendation\data\\test_dataset.csv')['user_id'].tolist()
     
     # 生成推荐
     recommendations = mf.generate_recommendations(test_users, top_n=1)

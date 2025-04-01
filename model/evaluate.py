@@ -262,29 +262,57 @@ class RecommenderEvaluator:
 if __name__ == "__main__":
     # 初始化评估器
     evaluator = RecommenderEvaluator(
-        train_data_path='D:\\Python\project\\bookRecommendation\\data\\train_dataset.csv',
-        test_users_path='D:\\Python\project\\bookRecommendation\\data\\test_dataset.csv'
+        train_data_path='D:\Python\project\\bookRecommendation\BookRecommendation\data\\train_dataset.csv',
+        test_users_path='D:\Python\project\\bookRecommendation\BookRecommendation\data\\test_dataset.csv'
     )
     
     # 添加要评估的模型
-    from CF import CollaborativeFiltering
-    from MF import MatrixFactorization
-    
+    # from CF import CollaborativeFiltering
+    # from MF import MatrixFactorization
+    from NCF import NCF
+
     # 初始化并训练模型
-    cf = CollaborativeFiltering()
-    cf.load_data('train_for_validation.csv')  # 使用划分后的训练集
-    cf.preprocess()
-    cf.compute_item_similarity()
+    # cf = CollaborativeFiltering()
+    # cf.load_data('train_for_validation.csv')  # 使用划分后的训练集
+    # cf.preprocess()
+    # cf.compute_item_similarity()
     
-    mf = MatrixFactorization()
-    mf.load_data('train_for_validation.csv')
-    mf.preprocess()
-    mf.train()
+    # mf = MatrixFactorization()
+    # mf.load_data('train_for_validation.csv')
+    # mf.preprocess()
+    # mf.train()
+
+    ncf = NCF(
+        embedding_dim=16, 
+        layers=[64, 32], 
+        learning_rate=0.005, 
+        epochs=5,  # 减少训练轮数以加快评估
+        batch_size=1024,
+        neg_ratio=2,
+        early_stopping_patience=2,
+        sample_ratio=0.3  # 使用30%数据进行快速评估
+    )
+    ncf.load_data(r'D:\\Python\\project\bookRecommendation\BookRecommendation\data\\train_dataset.csv')
+    ncf.preprocess()
+    ncf.train()
+      # 加载测试用户
+    test_users = pd.read_csv(
+        r'D:\\Python\\project\bookRecommendation\BookRecommendation\data\\test_dataset.csv'
+    )['user_id'].tolist()
+
+    ncf_recommendations = ncf.generate_recommendations(test_users, top_n=10)
     
-    # 添加模型到评估器
-    evaluator.add_model('ItemCF', cf.recommend_item_based)
-    evaluator.add_model('ALS', mf.recommend)
-    
+    # 创建包装函数将推荐结果字典转换为可调用函数
+    def ncf_recommender(user_id, top_n=10):
+        """包装NCF推荐结果为函数"""
+        if user_id in ncf_recommendations:
+            return ncf_recommendations[user_id][:top_n]
+        return []  # 用户不存在时返回空列表
+
+    # 正确添加模型到评估器
+    evaluator.add_model('NCF', ncf_recommender)
+
+
     # 评估模型
     evaluator.evaluate(top_n=10)
     

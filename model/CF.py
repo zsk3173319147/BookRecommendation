@@ -201,14 +201,14 @@ if __name__ == "__main__":
     cf = CollaborativeFiltering()
     
     # 加载数据
-    cf.load_data('D:\\Python\\project\\bookRecommendation\\data\\train_dataset.csv')
+    cf.load_data('D:\Python\project\\bookRecommendation\BookRecommendation\data\\train_dataset.csv')
     cf.preprocess()
     
     # 计算相似度
     cf.compute_item_similarity()  # 基于物品的CF
     
     # 加载测试用户
-    test_users = pd.read_csv('D:\\Python\\project\\bookRecommendation\\data\\test_dataset.csv')['user_id'].tolist()
+    test_users = pd.read_csv('D:\Python\project\\bookRecommendation\BookRecommendation\data\\test_dataset.csv')['user_id'].tolist()
     
     # 生成物品推荐
     item_recommendations = cf.generate_recommendations(test_users, method='item', top_n=1)
